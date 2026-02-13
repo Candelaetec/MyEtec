@@ -1,20 +1,128 @@
-<form action="/update-profile" method="POST" enctype="multipart/form-data">
-  <input type="file" name="banner">
-  <input type="file" name="avatar">
-  <textarea name="bio"></textarea>
-  <button>Guardar</button>
-</form>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Perfil</title>
 
-<img id="banner">
-<img id="avatar">
-<p id="bio"></p>
+  <style>
+    body{
+      margin:0;
+      font-family:sans-serif;
+      background:#111;
+      color:white;
+      text-align:center;
+    }
 
-<script>
-fetch("/me")
-  .then(r => r.json())
-  .then(u => {
-    if (u.banner) banner.src = u.banner;
-    if (u.avatar) avatar.src = u.avatar;
-    bio.textContent = u.bio || "";
-  });
-</script>
+    /* Banner */
+    #banner{
+      width:100%;
+      height:200px;
+      object-fit:cover;
+      background:#222;
+    }
+
+    /* Avatar */
+    #avatar{
+      width:140px;
+      height:140px;
+      border-radius:50%;
+      margin-top:-70px;
+      border:5px solid #111;
+      object-fit:cover;
+      background:#333;
+    }
+
+    .badge{
+      color:#00e0ff;
+      font-weight:bold;
+      margin-top:5px;
+    }
+
+    button{
+      padding:8px 16px;
+      margin-top:15px;
+      cursor:pointer;
+    }
+
+    /* FORM OCULTO */
+    #editForm{
+      display:none;
+      margin-top:20px;
+    }
+
+    textarea{
+      width:250px;
+      height:80px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========= PERFIL NORMAL ========= -->
+
+  <img id="banner">
+
+  <img id="avatar">
+
+  <h2 id="name"></h2>
+  <div id="badge"></div>
+
+  <p id="bio"></p>
+
+  <button id="editBtn">Editar perfil ✏️</button>
+
+
+  <!-- ========= FORM SOLO SI EDITA ========= -->
+
+  <form id="editForm" action="/update-profile" method="POST" enctype="multipart/form-data">
+    <p>Banner:</p>
+    <input type="file" name="banner"><br><br>
+
+    <p>Foto perfil:</p>
+    <input type="file" name="avatar"><br><br>
+
+    <p>Bio:</p>
+    <textarea name="bio"></textarea><br><br>
+
+    <button>Guardar cambios</button>
+  </form>
+
+
+  <!-- ========= SCRIPT ========= -->
+
+  <script>
+    const editBtn = document.getElementById("editBtn");
+    const form = document.getElementById("editForm");
+
+    // toggle mostrar form
+    editBtn.onclick = () => {
+      form.style.display =
+        form.style.display === "none" ? "block" : "none";
+    };
+
+
+    // cargar datos del usuario
+    fetch("/me")
+      .then(r => r.json())
+      .then(u => {
+
+        document.getElementById("name").textContent = u.username;
+
+        if(u.avatar)
+          document.getElementById("avatar").src = u.avatar;
+
+        if(u.banner)
+          document.getElementById("banner").src = u.banner;
+
+        document.getElementById("bio").textContent = u.bio || "";
+
+        // badge moderador
+        if(u.role === "mod"){
+          document.getElementById("badge").innerHTML =
+            "⭐ Moderador de MyEtec";
+        }
+      });
+  </script>
+
+</body>
+</html>
