@@ -9,7 +9,7 @@ const app = express();
 /* =========================
    PATHS SEGUROS
 ========================= */
-const CLIENT_PATH = path.join(__dirname, "..", "client");
+const CLIENT_PATH = path.join(__dirname, "client");
 const DB_PATH = path.join(__dirname, "database.db");
 
 /* =========================
