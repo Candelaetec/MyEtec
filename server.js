@@ -50,6 +50,13 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   username TEXT,
   password TEXT
+  firstName TEXT,
+  lastName TEXT,
+  bio TEXT,
+  avatar TEXT,
+  banner TEXT,
+  isMod INTEGER DEFAULT 0
+
 )
 `);
 
@@ -141,4 +148,23 @@ app.get("/users", (req, res) => {
   db.all("SELECT email FROM users", [], (err, rows) => {
     res.json(rows);
   });
+});
+
+app.get("/perfil", (req, res) => {
+  if (!req.session.userId) return res.redirect("/");
+
+  res.sendFile(path.join(CLIENT_PATH, "perfil.html"));
+});
+
+app.get("/api/profile", (req, res) => {
+  if (!req.session.userId) return res.status(401).json({});
+
+  db.get(
+    `SELECT firstName, lastName, bio, avatar, banner, isMod
+     FROM users WHERE id = ?`,
+    [req.session.userId],
+    (err, user) => {
+      res.json(user);
+    }
+  );
 });
