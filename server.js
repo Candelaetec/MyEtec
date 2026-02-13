@@ -2,23 +2,68 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const bcrypt = require("bcrypt");
 const session = require("express-session");
+const fs = require("fs");
 const path = require("path");
 
 const app = express();
 
 /* =========================
-   PATHS SEGUROS
+   📁 PATHS IMPORTANTES
 ========================= */
-const CLIENT_PATH = path.join(__dirname, "client");
-const DB_PATH = path.join(__dirname, "database.db");
+
+// Render borra el proyecto, pero /tmp vive mientras corre
+const DB_PATH = path.join("/tmp", "database.db");
+
+// backup json (por si se reinicia)
+const BACKUP_PATH = path.join(__dirname, "backup-users.json");
+
+const CLIENT_PATH = path.join(__dirname, "..", "client");
+
 
 /* =========================
-   DB
+   🗄️ DB
 ========================= */
+
 const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) console.error(err);
   else console.log("✅ DB conectada");
 });
+
+
+/* =========================
+   🔄 RESTORE BACKUP (MAGIA)
+   si la db está vacía, restaura
+========================= */
+
+function restoreBackup() {
+  if (!fs.existsSync(BACKUP_PATH)) return;
+
+  const users = JSON.parse(fs.readFileSync(BACKUP_PATH));
+
+  users.forEach(u => {
+    db.run(
+      "INSERT OR IGNORE INTO users (id, email, username, password, role) VALUES (?, ?, ?, ?, ?)",
+      [u.id, u.email, u.username, u.password, u.role]
+    );
+  });
+
+  console.log("♻️ Backup restaurado");
+}
+
+
+/* =========================
+   💾 GUARDAR BACKUP
+========================= */
+
+function saveBackup() {
+  db.all("SELECT * FROM users", (err, rows) => {
+    if (!err) {
+      fs.writeFileSync(BACKUP_PATH, JSON.stringify(rows, null, 2));
+      console.log("💾 Backup guardado");
+    }
+  });
+}
+
 
 /* =========================
    MIDDLEWARES
@@ -33,36 +78,37 @@ app.use(session({
   saveUninitialized: false
 }));
 
-/* 👉 MUY IMPORTANTE: servir frontend */
 app.use(express.static(CLIENT_PATH));
 
-/* 👉 Ruta principal (arregla el Cannot GET /) */
+
+/* =========================
+   HOME
+========================= */
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(CLIENT_PATH, "login.html"));
 });
 
+
 /* =========================
-   CREAR TABLA
+   TABLA
 ========================= */
+
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT UNIQUE,
   username TEXT,
-  password TEXT
-  firstName TEXT,
-  lastName TEXT,
-  bio TEXT,
-  avatar TEXT,
-  banner TEXT,
-  isMod INTEGER DEFAULT 0
-
+  password TEXT,
+  role TEXT DEFAULT 'user'
 )
-`);
+`, restoreBackup);
+
 
 /* =========================
    REGISTER
 ========================= */
+
 app.post("/register", async (req, res) => {
   try {
     const { email, username, password } = req.body;
@@ -81,18 +127,21 @@ app.post("/register", async (req, res) => {
 
         req.session.userId = this.lastID;
 
-        // 👉 redirige al feed
+        saveBackup(); // ⭐ guardar cambios
+
         res.redirect("/feed.html");
       }
     );
-  } catch (e) {
+  } catch {
     res.status(500).send("Error interno");
   }
 });
 
+
 /* =========================
    LOGIN
 ========================= */
+
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
 
@@ -104,67 +153,69 @@ app.post("/login", (req, res) => {
 
     req.session.userId = user.id;
 
-    // 👉 redirige al feed
     res.redirect("/feed.html");
   });
 });
 
+
 /* =========================
-   SESIÓN ACTUAL
+   USERS (solo mails)
+   👉 para vos como admin
 ========================= */
+
+app.get("/users", (req, res) => {
+  db.all("SELECT id, email FROM users", (err, rows) => {
+    res.json(rows);
+  });
+});
+
+
+/* =========================
+   HACER MODERADOR
+========================= */
+
+app.post("/make-mod/:id", (req, res) => {
+  db.run(
+    "UPDATE users SET role='mod' WHERE id=?",
+    [req.params.id],
+    () => {
+      saveBackup();
+      res.send("Ahora es moderador ✅");
+    }
+  );
+});
+
+
+/* =========================
+   PERFIL
+========================= */
+
 app.get("/me", (req, res) => {
   if (!req.session.userId) return res.status(401).send("No autorizado");
 
   db.get(
-    "SELECT id, username, email FROM users WHERE id = ?",
+    "SELECT id, username, email, role FROM users WHERE id=?",
     [req.session.userId],
     (err, user) => res.json(user)
   );
 });
 
+
 /* =========================
    LOGOUT
 ========================= */
+
 app.get("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/");
-  });
+  req.session.destroy(() => res.redirect("/"));
 });
+
 
 /* =========================
    SERVER
 ========================= */
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server corriendo"));
 
-;
-
-/* =========================
-   LISTAR USUARIOS (solo emails)
-========================= */
-app.get("/users", (req, res) => {
-  if (req.query.key !== "admin123") return res.sendStatus(403);
-
-  db.all("SELECT email FROM users", [], (err, rows) => {
-    res.json(rows);
-  });
-});
-
-app.get("/perfil", (req, res) => {
-  if (!req.session.userId) return res.redirect("/");
-
-  res.sendFile(path.join(CLIENT_PATH, "perfil.html"));
-});
-
-app.get("/api/profile", (req, res) => {
-  if (!req.session.userId) return res.status(401).json({});
-
-  db.get(
-    `SELECT firstName, lastName, bio, avatar, banner, isMod
-     FROM users WHERE id = ?`,
-    [req.session.userId],
-    (err, user) => {
-      res.json(user);
-    }
-  );
+app.listen(PORT, () => {
+  console.log("🚀 Server corriendo");
 });
