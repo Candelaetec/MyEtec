@@ -174,3 +174,26 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server corriendo");
 });
+
+// agregar campo bio si no existe
+await pool.query(`
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''
+`);
+
+/* =========================
+   UPDATE PROFILE
+========================= */
+
+app.post("/update-profile", async (req, res) => {
+  if (!req.session.userId) return res.sendStatus(401);
+
+  const { username, bio } = req.body;
+
+  await pool.query(
+    "UPDATE users SET username=$1, bio=$2 WHERE id=$3",
+    [username, bio, req.session.userId]
+  );
+
+  res.sendStatus(200);
+});
