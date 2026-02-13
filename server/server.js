@@ -127,6 +127,7 @@ app.get("/logout", (req, res) => {
 /* =========================
    SERVER
 ========================= */
-app.listen(3000, () =>
-  console.log("🚀 Server corriendo en → http://localhost:3000")
-);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server corriendo"));
+
+;
