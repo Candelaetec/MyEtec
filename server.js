@@ -14,7 +14,6 @@ const app = express();
 // Render borra el proyecto, pero /tmp vive mientras corre
 /* PATHS SEGUROS */
 
-const DB_PATH = path.join(process.cwd(), "server", "database.db");
 const CLIENT_PATH = path.join(__dirname, "client");
 const DB_PATH = path.join(__dirname, "database.db");
 
