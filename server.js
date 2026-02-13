@@ -79,8 +79,6 @@ initDB().catch(console.error);
 
 /*************************
   MULTER (MEMORIA)
-  Ahora guardamos en memoria para 
-  subir directo a Supabase
 *************************/
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -132,6 +130,10 @@ async function uploadToSupabase(file, userId, type) {
 /*************************
   MIDDLEWARES
 *************************/
+
+// Trust proxy - IMPORTANTE para Render
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -142,11 +144,18 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   }
 }));
 
 app.use(express.static(CLIENT_PATH));
+
+// Debug middleware
+app.use((req, res, next) => {
+  console.log('📍', req.method, req.path, '| Session:', req.session.userId || 'sin sesión');
+  next();
+});
 
 /*************************
   HOME
@@ -198,9 +207,19 @@ app.post("/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(400).send("Contraseña incorrecta");
 
+    // Guardar userId en la sesión
     req.session.userId = user.id;
-
-    res.redirect("/feed.html");
+    
+    // Guardar la sesión antes de redirigir
+    req.session.save((err) => {
+      if (err) {
+        console.error('❌ Error guardando sesión:', err);
+        return res.status(500).send("Error guardando sesión");
+      }
+      console.log('✅ Sesión guardada para usuario:', user.id, user.username);
+      res.redirect("/feed.html");
+    });
+    
   } catch (err) {
     console.error(err);
     res.status(500).send("Error en el servidor");
@@ -212,23 +231,31 @@ app.post("/login", async (req, res) => {
 *************************/
 app.get("/me", async (req, res) => {
   try {
-    if (!req.session.userId) return res.sendStatus(401);
+    if (!req.session.userId) {
+      console.log('⚠️ /me sin sesión');
+      return res.sendStatus(401);
+    }
 
     const { rows } = await pool.query(
       "SELECT id, username, email, role, bio, avatar, banner FROM users WHERE id=$1",
       [req.session.userId]
     );
 
+    if (rows.length === 0) {
+      console.log('⚠️ Usuario no encontrado:', req.session.userId);
+      return res.sendStatus(401);
+    }
+
+    console.log('✅ /me OK:', rows[0].username);
     res.json(rows[0]);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Error en /me:', err);
     res.status(500).json({ error: "Error al obtener usuario" });
   }
 });
 
 /*************************
   ACTUALIZAR PERFIL
-  Ahora con Supabase Storage
 *************************/
 app.post(
   "/update-profile",
@@ -359,6 +386,8 @@ app.post(
         RETURNING id
       `, [req.session.userId, content.trim(), imageUrl]);
 
+      console.log('✅ Post creado:', rows[0].id);
+
       res.json({ 
         success: true, 
         postId: rows[0].id 
@@ -372,7 +401,7 @@ app.post(
 );
 
 /*************************
-  POSTS - ELIMINAR (opcional, solo el dueño o mod)
+  POSTS - ELIMINAR
 *************************/
 app.delete("/posts/:id", async (req, res) => {
   try {
@@ -434,11 +463,12 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log("🚀 Server corriendo en puerto", PORT);
+  console.log("📝 Modo:", process.env.NODE_ENV || 'development');
 });
 
-/* =========================
-   💬 CHATROOM
-========================= */
+/*************************
+  💬 CHATROOM
+*************************/
 
 let messages = [];
 
@@ -456,7 +486,7 @@ io.on("connection", (socket) => {
 
     messages.push(data);
 
-    // limitar historial (opcional)
+    // limitar historial
     if (messages.length > 50) messages.shift();
 
     io.emit("message", data);
