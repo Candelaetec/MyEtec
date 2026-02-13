@@ -1,140 +1,43 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Perfil</title>
+<script>
+const editBtn = document.getElementById("editBtn");
+const form = document.getElementById("editForm");
 
-  <style>
-    body{
-      margin:0;
-      font-family:sans-serif;
-      background:#111;
-      color:white;
-      text-align:center;
-    }
+// toggle mostrar form
+editBtn.onclick = () => {
+  form.style.display =
+    form.style.display === "none" ? "block" : "none";
+};
 
-    /* Banner */
-    #banner{
-      width:100%;
-      height:200px;
-      object-fit:cover;
-      background:#222;
-    }
+// cargar datos
+async function load() {
+  const res = await fetch("/me");
+  const u = await res.json();
 
-    /* Avatar */
-    #avatar{
-      width:140px;
-      height:140px;
-      border-radius:50%;
-      margin-top:-70px;
-      border:5px solid #111;
-      object-fit:cover;
-      background:#333;
-    }
+  document.getElementById("name").textContent = u.username || "";
 
-    .badge{
-      color:#00e0ff;
-      font-weight:bold;
-      margin-top:5px;
-    }
+  if (u.avatar)
+    document.getElementById("avatar").src = u.avatar;
 
-    button{
-      padding:8px 16px;
-      margin-top:15px;
-      cursor:pointer;
-    }
+  if (u.banner)
+    document.getElementById("banner").src = u.banner;
 
-    /* FORM OCULTO */
-    #editForm{
-      display:none;
-      margin-top:20px;
-    }
+  document.getElementById("bio").textContent = u.bio || "";
 
-    textarea{
-      width:250px;
-      height:80px;
-    }
-  </style>
-</head>
-<body>
+  const badge = document.getElementById("badge");
 
-  <!-- ========= PERFIL NORMAL ========= -->
+  // ===== BADGES =====
+  if (u.role === "admin") {
+    badge.textContent = "⭐ Admin";
+  } 
+  else if (u.role === "mod") {
+    badge.textContent = "🔹 Moderador";
+  }
 
-  <img id="banner">
-
-  <img id="avatar">
-
-  <h2 id="name"></h2>
-  <div id="badge"></div>
-
-  <p id="bio"></p>
-
-  <button id="editBtn">Editar perfil ✏️</button>
-
-
-  <!-- ========= FORM SOLO SI EDITA ========= -->
-
-  <form id="editForm" action="/update-profile" method="POST" enctype="multipart/form-data">
-    <p>Banner:</p>
-    <input type="file" name="banner"><br><br>
-
-    <p>Foto perfil:</p>
-    <input type="file" name="avatar"><br><br>
-
-    <p>Bio:</p>
-    <textarea name="bio"></textarea><br><br>
-
-    <button>Guardar cambios</button>
-  </form>
-
-
-  <!-- ========= SCRIPT ========= -->
-
-  <script>
-    const editBtn = document.getElementById("editBtn");
-    const form = document.getElementById("editForm");
-
-    // toggle mostrar form
-    editBtn.onclick = () => {
-      form.style.display =
-        form.style.display === "none" ? "block" : "none";
-    };
-
-
-    // cargar datos del usuario
-    fetch("/me")
-      .then(r => r.json())
-      .then(u => {
-
-        document.getElementById("name").textContent = u.username;
-
-        if(u.avatar)
-          document.getElementById("avatar").src = u.avatar;
-
-        if(u.banner)
-          document.getElementById("banner").src = u.banner;
-
-        document.getElementById("bio").textContent = u.bio || "";
-
-        // badge moderador
-<<<<<<< HEAD
-        if(u.role === "mod"){
-=======
-        if(u.role === "admin"){
->>>>>>> 4416784 (si)
-          document.getElementById("badge").innerHTML =
-            "⭐ Moderador de MyEtec";
-        }
-      });
-<<<<<<< HEAD
-=======
-
-      if (user.role === 'admin' && user.custom_html) {
-  document.getElementById('profileContainer').innerHTML = user.custom_html;
+  // ===== HTML PERSONALIZADO SOLO STAFF =====
+  if ((u.role === "admin" || u.role === "mod") && u.custom_html) {
+    document.body.insertAdjacentHTML("beforeend", u.custom_html);
+  }
 }
 
->>>>>>> 4416784 (si)
-  </script>
-
-</body>
-</html>
+load();
+</script>
