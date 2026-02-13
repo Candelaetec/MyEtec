@@ -1,13 +1,13 @@
 /*************************
-  IMPORTS (SIN DUPLICADOS)
+  IMPORTS
 *************************/
 const express = require("express");
 const bcrypt = require("bcrypt");
 const session = require("express-session");
 const path = require("path");
-const fs = require("fs");
 const multer = require("multer");
 const { Pool } = require("pg");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const http = require("http");
@@ -17,15 +17,17 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 /*************************
+  SUPABASE CLIENT
+*************************/
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
+/*************************
   CONFIG
 *************************/
 const CLIENT_PATH = path.join(__dirname, "client");
-const UPLOAD_PATH = path.join(__dirname, "uploads");
-
-/* crear carpeta uploads si no existe */
-if (!fs.existsSync(UPLOAD_PATH)) {
-  fs.mkdirSync(UPLOAD_PATH);
-}
 
 /*************************
   DB (SUPABASE POSTGRES)
@@ -36,9 +38,10 @@ const pool = new Pool({
 });
 
 /*************************
-  INIT TABLA
+  INIT TABLAS
 *************************/
 async function initDB() {
+  // Tabla users
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -52,25 +55,79 @@ async function initDB() {
     )
   `);
 
-  console.log("✅ Tabla users lista");
+  // Tabla posts
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      image_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Índices para mejor performance
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
+  `);
+
+  console.log("✅ Tablas users y posts listas");
 }
 
 initDB().catch(console.error);
 
 /*************************
-  MULTER (IMÁGENES)
+  MULTER (MEMORIA)
+  Ahora guardamos en memoria para 
+  subir directo a Supabase
 *************************/
-const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, UPLOAD_PATH),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, req.session.userId + "-" + file.fieldname + ext);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten imágenes'));
+    }
   }
 });
 
-const upload = multer({ storage });
+/*************************
+  HELPER: SUBIR A SUPABASE
+*************************/
+async function uploadToSupabase(file, userId, type) {
+  // type = 'avatar', 'banner', o 'post'
+  const ext = path.extname(file.originalname);
+  const fileName = `${userId}-${type}-${Date.now()}${ext}`;
+  
+  let filePath;
+  if (type === 'post') {
+    filePath = `posts/${fileName}`;
+  } else {
+    filePath = `${type}s/${fileName}`;
+  }
 
-app.use("/uploads", express.static(UPLOAD_PATH));
+  const { data, error } = await supabase.storage
+    .from('avatars')
+    .upload(filePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: true
+    });
+
+  if (error) throw error;
+
+  // Obtener URL pública
+  const { data: { publicUrl } } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
 
 /*************************
   MIDDLEWARES
@@ -79,9 +136,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
-  secret: "pikmin-super-secret",
+  secret: process.env.SESSION_SECRET || "pikmin-super-secret",
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+  }
 }));
 
 app.use(express.static(CLIENT_PATH));
@@ -112,7 +174,8 @@ app.post("/register", async (req, res) => {
 
     res.redirect("/login.html");
 
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.status(400).send("Usuario ya existe");
   }
 });
@@ -121,40 +184,51 @@ app.post("/register", async (req, res) => {
   LOGIN
 *************************/
 app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const { rows } = await pool.query(
-    "SELECT * FROM users WHERE email=$1",
-    [email]
-  );
+    const { rows } = await pool.query(
+      "SELECT * FROM users WHERE email=$1",
+      [email]
+    );
 
-  const user = rows[0];
-  if (!user) return res.status(400).send("No existe");
+    const user = rows[0];
+    if (!user) return res.status(400).send("No existe");
 
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(400).send("Contraseña incorrecta");
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(400).send("Contraseña incorrecta");
 
-  req.session.userId = user.id;
+    req.session.userId = user.id;
 
-  res.redirect("/feed.html");
+    res.redirect("/feed.html");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error en el servidor");
+  }
 });
 
 /*************************
-  ENDPOINT /me  👈 ESTE ES
+  ENDPOINT /me
 *************************/
 app.get("/me", async (req, res) => {
-  if (!req.session.userId) return res.sendStatus(401);
+  try {
+    if (!req.session.userId) return res.sendStatus(401);
 
-  const { rows } = await pool.query(
-    "SELECT id, username, email, role, bio, avatar, banner FROM users WHERE id=$1",
-    [req.session.userId]
-  );
+    const { rows } = await pool.query(
+      "SELECT id, username, email, role, bio, avatar, banner FROM users WHERE id=$1",
+      [req.session.userId]
+    );
 
-  res.json(rows[0]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener usuario" });
+  }
 });
 
 /*************************
   ACTUALIZAR PERFIL
+  Ahora con Supabase Storage
 *************************/
 app.post(
   "/update-profile",
@@ -163,30 +237,46 @@ app.post(
     { name: "banner", maxCount: 1 }
   ]),
   async (req, res) => {
+    try {
+      if (!req.session.userId) return res.sendStatus(401);
 
-    if (!req.session.userId) return res.sendStatus(401);
+      const { bio } = req.body;
+      let avatar = null;
+      let banner = null;
 
-    const { bio, username } = req.body;
+      // Subir avatar si existe
+      if (req.files.avatar && req.files.avatar[0]) {
+        avatar = await uploadToSupabase(
+          req.files.avatar[0],
+          req.session.userId,
+          'avatar'
+        );
+      }
 
-    const avatar = req.files.avatar
-      ? "/uploads/" + req.files.avatar[0].filename
-      : null;
+      // Subir banner si existe
+      if (req.files.banner && req.files.banner[0]) {
+        banner = await uploadToSupabase(
+          req.files.banner[0],
+          req.session.userId,
+          'banner'
+        );
+      }
 
-    const banner = req.files.banner
-      ? "/uploads/" + req.files.banner[0].filename
-      : null;
+      // Actualizar base de datos
+      await pool.query(`
+        UPDATE users
+        SET
+          bio    = COALESCE($1, bio),
+          avatar = COALESCE($2, avatar),
+          banner = COALESCE($3, banner)
+        WHERE id=$4
+      `, [bio, avatar, banner, req.session.userId]);
 
-    await pool.query(`
-      UPDATE users
-      SET
-        username = COALESCE($1, username),
-        bio      = COALESCE($2, bio),
-        avatar   = COALESCE($3, avatar),
-        banner   = COALESCE($4, banner)
-      WHERE id=$5
-    `, [username, bio, avatar, banner, req.session.userId]);
-
-    res.redirect("/perfil.html");
+      res.redirect("/profile.html");
+    } catch (err) {
+      console.error('Error actualizando perfil:', err);
+      res.status(500).send("Error al actualizar perfil");
+    }
   }
 );
 
@@ -194,8 +284,132 @@ app.post(
   ADMIN USERS
 *************************/
 app.get("/users", async (_, res) => {
-  const { rows } = await pool.query("SELECT id,email FROM users");
-  res.json(rows);
+  try {
+    const { rows } = await pool.query("SELECT id,email,username,role FROM users");
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener usuarios" });
+  }
+});
+
+/*************************
+  POSTS - OBTENER TODOS
+*************************/
+app.get("/posts", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        p.id,
+        p.content,
+        p.image_url,
+        p.created_at,
+        u.id as user_id,
+        u.username,
+        u.avatar,
+        u.role
+      FROM posts p
+      JOIN users u ON p.user_id = u.id
+      ORDER BY p.created_at DESC
+      LIMIT 100
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Error obteniendo posts:', err);
+    res.status(500).json({ error: "Error al obtener posts" });
+  }
+});
+
+/*************************
+  POSTS - CREAR NUEVO
+*************************/
+app.post(
+  "/posts",
+  upload.single('image'),
+  async (req, res) => {
+    try {
+      if (!req.session.userId) return res.sendStatus(401);
+
+      const { content } = req.body;
+      
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ error: "El contenido es requerido" });
+      }
+
+      if (content.length > 500) {
+        return res.status(400).json({ error: "El contenido es muy largo (máx 500 caracteres)" });
+      }
+
+      let imageUrl = null;
+
+      // Subir imagen si existe
+      if (req.file) {
+        imageUrl = await uploadToSupabase(
+          req.file,
+          req.session.userId,
+          'post'
+        );
+      }
+
+      // Insertar post
+      const { rows } = await pool.query(`
+        INSERT INTO posts (user_id, content, image_url)
+        VALUES ($1, $2, $3)
+        RETURNING id
+      `, [req.session.userId, content.trim(), imageUrl]);
+
+      res.json({ 
+        success: true, 
+        postId: rows[0].id 
+      });
+
+    } catch (err) {
+      console.error('Error creando post:', err);
+      res.status(500).json({ error: "Error al crear post" });
+    }
+  }
+);
+
+/*************************
+  POSTS - ELIMINAR (opcional, solo el dueño o mod)
+*************************/
+app.delete("/posts/:id", async (req, res) => {
+  try {
+    if (!req.session.userId) return res.sendStatus(401);
+
+    const postId = req.params.id;
+
+    // Verificar si el usuario es dueño del post o es moderador
+    const { rows: userRows } = await pool.query(
+      "SELECT role FROM users WHERE id=$1",
+      [req.session.userId]
+    );
+
+    const { rows: postRows } = await pool.query(
+      "SELECT user_id FROM posts WHERE id=$1",
+      [postId]
+    );
+
+    if (postRows.length === 0) {
+      return res.status(404).json({ error: "Post no encontrado" });
+    }
+
+    const isModerator = userRows[0].role === 'mod';
+    const isOwner = postRows[0].user_id === req.session.userId;
+
+    if (!isModerator && !isOwner) {
+      return res.status(403).json({ error: "No tienes permiso para eliminar este post" });
+    }
+
+    await pool.query("DELETE FROM posts WHERE id=$1", [postId]);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error('Error eliminando post:', err);
+    res.status(500).json({ error: "Error al eliminar post" });
+  }
 });
 
 /*************************
@@ -206,11 +420,19 @@ app.get("/logout", (req, res) => {
 });
 
 /*************************
+  MANEJO DE ERRORES
+*************************/
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Algo salió mal!');
+});
+
+/*************************
   SERVER
 *************************/
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log("🚀 Server corriendo en puerto", PORT);
 });
 

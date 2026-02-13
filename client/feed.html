@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Feed</title>
+  <title>Feed - MyEtec</title>
 
   <style>
-    body {
+    * {
       margin: 0;
-      font-family: Arial, sans-serif;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
       background: #ffe4ef;
+      padding-bottom: 80px;
     }
 
     /* HEADER */
@@ -24,6 +30,7 @@
       font-size: 20px;
       font-weight: bold;
       z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
 
     /* SEARCH */
@@ -35,23 +42,148 @@
 
     .search input {
       width: 90%;
-      padding: 10px;
-      border-radius: 20px;
-      border: none;
+      max-width: 500px;
+      padding: 12px 20px;
+      border-radius: 25px;
+      border: 2px solid #e0439c;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.3s;
+    }
+
+    .search input:focus {
+      border-color: #c83387;
+      box-shadow: 0 0 10px rgba(224, 67, 156, 0.2);
     }
 
     /* FEED */
     .feed {
       padding: 20px;
-      padding-bottom: 90px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .feed h2 {
+      color: #e0439c;
+      margin-bottom: 20px;
       text-align: center;
-      color: #555;
+    }
+
+    /* POST CARD */
+    .post {
+      background: white;
+      border-radius: 15px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .post-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .post-avatar {
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      background: #e0439c;
+      object-fit: cover;
+      border: 2px solid #e0439c;
+    }
+
+    .post-info {
+      flex: 1;
+    }
+
+    .post-username {
+      font-weight: bold;
+      color: #333;
+      font-size: 15px;
+    }
+
+    .post-time {
+      color: #999;
+      font-size: 12px;
+    }
+
+    .post-badge {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-left: 5px;
+    }
+
+    .post-content {
+      color: #333;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .post-image {
+      width: 100%;
+      border-radius: 10px;
+      margin-top: 10px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .post-image:hover {
+      transform: scale(1.02);
     }
 
     .empty {
+      text-align: center;
       margin-top: 60px;
       font-size: 18px;
-      opacity: 0.7;
+      color: #999;
+    }
+
+    .empty-icon {
+      font-size: 60px;
+      margin-bottom: 10px;
+    }
+
+    /* LOADING */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #e0439c;
+      font-size: 16px;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #e0439c;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
     /* NAV BAR */
@@ -63,21 +195,171 @@
       justify-content: space-around;
       background: #e0439c;
       padding: 12px 0;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
     }
 
     nav button {
       background: white;
       border: none;
       border-radius: 12px;
-      padding: 8px 14px;
+      padding: 10px 18px;
       cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+      color: #e0439c;
+    }
+
+    nav button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    nav button:active {
+      transform: translateY(0);
+    }
+
+    /* MODAL */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 25px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+      animation: modalIn 0.3s ease;
+    }
+
+    @keyframes modalIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: #f0f0f0;
+      border: none;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      transition: background 0.2s;
+    }
+
+    .modal-close:hover {
+      background: #e0e0e0;
+    }
+
+    .modal h2 {
+      color: #e0439c;
+      margin-bottom: 20px;
+      font-size: 22px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 100px;
+      transition: border 0.2s;
+    }
+
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #e0439c;
+    }
+
+    .form-group input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 2px dashed #e0439c;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .form-group input[type="file"]:hover {
+      background: #fff0f7;
+    }
+
+    .image-preview {
+      margin-top: 10px;
+      max-width: 100%;
+      border-radius: 10px;
+      display: none;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #e0439c 0%, #c83387 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(224, 67, 156, 0.4);
+    }
+
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
     }
 
     /* desktop */
     @media (min-width: 700px) {
       .feed {
-        max-width: 600px;
-        margin: auto;
+        padding-bottom: 20px;
       }
     }
   </style>
@@ -86,27 +368,262 @@
 <body>
 
   <header>
-    ESPACIO PARA LOGO
+    🌸 MyEtec Feed
   </header>
 
   <div class="search">
-    <input placeholder="Buscar..." />
+    <input id="searchInput" placeholder="Buscar posts..." />
   </div>
 
   <div class="feed">
-    <h2>Posts recientes</h2>
+    <h2>Posts Recientes</h2>
 
-    <div class="empty">
-      Todavía no hay posts 😢<br>
-      ¡Sé la primera persona en publicar!
+    <div id="postsContainer">
+      <div class="loading">
+        <div class="spinner"></div>
+        Cargando posts...
+      </div>
     </div>
   </div>
 
   <nav>
-    <button>🏠 Inicio</button>
-    <button>➕ Post</button>
+    <button onclick="location.href='feed.html'">🏠 Inicio</button>
+    <button id="btnNewPost">➕ Post</button>
     <button onclick="location.href='profile.html'">👤 Perfil</button>
   </nav>
+
+  <!-- MODAL CREAR POST -->
+  <div id="modalPost" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <h2>✨ Crear Nuevo Post</h2>
+
+      <form id="formPost" enctype="multipart/form-data">
+        <div class="form-group">
+          <label>¿Qué está pasando?</label>
+          <textarea 
+            id="postContent" 
+            name="content" 
+            placeholder="Comparte algo con la comunidad..."
+            required
+            maxlength="500"
+          ></textarea>
+          <small id="charCount" style="color: #999;">0/500</small>
+        </div>
+
+        <div class="form-group">
+          <label>Imagen (opcional)</label>
+          <input type="file" id="postImage" name="image" accept="image/*">
+          <img id="imagePreview" class="image-preview" />
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnSubmit">
+          Publicar 🚀
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let allPosts = [];
+
+    // Cargar usuario actual
+    async function loadCurrentUser() {
+      try {
+        const res = await fetch('/me');
+        if (!res.ok) {
+          window.location = '/login.html';
+          return;
+        }
+        currentUser = await res.json();
+      } catch (err) {
+        console.error('Error cargando usuario:', err);
+        window.location = '/login.html';
+      }
+    }
+
+    // Cargar posts
+    async function loadPosts() {
+      try {
+        const res = await fetch('/posts');
+        if (!res.ok) throw new Error('Error cargando posts');
+        
+        allPosts = await res.json();
+        renderPosts(allPosts);
+      } catch (err) {
+        console.error('Error:', err);
+        document.getElementById('postsContainer').innerHTML = `
+          <div class="empty">
+            <div class="empty-icon">😢</div>
+            Error cargando posts
+          </div>
+        `;
+      }
+    }
+
+    // Renderizar posts
+    function renderPosts(posts) {
+      const container = document.getElementById('postsContainer');
+      
+      if (posts.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <div class="empty-icon">📝</div>
+            Todavía no hay posts<br>
+            ¡Sé la primera persona en publicar!
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = posts.map(post => `
+        <div class="post">
+          <div class="post-header">
+            <img 
+              class="post-avatar" 
+              src="${post.avatar || 'https://via.placeholder.com/45'}"
+              onerror="this.src='https://via.placeholder.com/45'"
+            />
+            <div class="post-info">
+              <div>
+                <span class="post-username">${escapeHtml(post.username)}</span>
+                ${post.role === 'mod' ? '<span class="post-badge">⭐ MOD</span>' : ''}
+              </div>
+              <div class="post-time">${formatTime(post.created_at)}</div>
+            </div>
+          </div>
+          
+          <div class="post-content">${escapeHtml(post.content)}</div>
+          
+          ${post.image_url ? `
+            <img 
+              class="post-image" 
+              src="${post.image_url}"
+              alt="Post image"
+              onclick="window.open('${post.image_url}', '_blank')"
+            />
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // Formatear tiempo
+    function formatTime(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now - date;
+      
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      
+      if (minutes < 1) return 'Ahora';
+      if (minutes < 60) return `Hace ${minutes}m`;
+      if (hours < 24) return `Hace ${hours}h`;
+      if (days < 7) return `Hace ${days}d`;
+      
+      return date.toLocaleDateString('es-AR');
+    }
+
+    // Escapar HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Abrir modal
+    document.getElementById('btnNewPost').onclick = () => {
+      document.getElementById('modalPost').classList.add('active');
+    };
+
+    // Cerrar modal
+    function closeModal() {
+      document.getElementById('modalPost').classList.remove('active');
+      document.getElementById('formPost').reset();
+      document.getElementById('imagePreview').style.display = 'none';
+      document.getElementById('charCount').textContent = '0/500';
+    }
+
+    // Preview de imagen
+    document.getElementById('postImage').onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const preview = document.getElementById('imagePreview');
+          preview.src = e.target.result;
+          preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+
+    // Contador de caracteres
+    document.getElementById('postContent').oninput = (e) => {
+      const count = e.target.value.length;
+      document.getElementById('charCount').textContent = `${count}/500`;
+    };
+
+    // Enviar post
+    document.getElementById('formPost').onsubmit = async (e) => {
+      e.preventDefault();
+      
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.textContent = 'Publicando...';
+
+      try {
+        const formData = new FormData(e.target);
+        
+        const res = await fetch('/posts', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) throw new Error('Error creando post');
+
+        closeModal();
+        await loadPosts(); // Recargar posts
+        
+      } catch (err) {
+        console.error('Error:', err);
+        alert('Error al publicar. Intenta de nuevo.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Publicar 🚀';
+      }
+    };
+
+    // Búsqueda
+    document.getElementById('searchInput').oninput = (e) => {
+      const query = e.target.value.toLowerCase();
+      if (!query) {
+        renderPosts(allPosts);
+        return;
+      }
+
+      const filtered = allPosts.filter(post => 
+        post.content.toLowerCase().includes(query) ||
+        post.username.toLowerCase().includes(query)
+      );
+      
+      renderPosts(filtered);
+    };
+
+    // Inicializar
+    loadCurrentUser().then(() => {
+      loadPosts();
+    });
+
+    // Cerrar modal al hacer click fuera
+    document.getElementById('modalPost').onclick = (e) => {
+      if (e.target.id === 'modalPost') {
+        closeModal();
+      }
+    };
+  </script>
 
 </body>
 </html>
