@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat</title>
+  <style>
+    body { font-family: sans-serif; background:#111; color:white }
+    #chat { height:300px; overflow-y:auto; border:1px solid #444; padding:10px }
+    input { width:80% }
+  </style>
+</head>
+<body>
+
+<h2>💬 Chatroom</h2>
+
+<div id="chat"></div>
+
+<input id="msg" placeholder="mensaje...">
+<button onclick="send()">Enviar</button>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+const socket = io();
+const chat = document.getElementById("chat");
+
+function add(m){
+  chat.innerHTML += `<div>[${m.time}] ${m.text}</div>`;
+  chat.scrollTop = chat.scrollHeight;
+}
+
+socket.on("history", msgs => msgs.forEach(add));
+socket.on("message", add);
+
+function send(){
+  const input = document.getElementById("msg");
+  socket.emit("message", input.value);
+  input.value="";
+}
+</script>
+
+</body>
+</html>
