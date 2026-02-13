@@ -10,6 +10,11 @@ const multer = require("multer");
 const { Pool } = require("pg");
 
 const app = express();
+const http = require("http");
+const { Server } = require("socket.io");
+
+const server = http.createServer(app);
+const io = new Server(server);
 
 /*************************
   CONFIG
@@ -207,4 +212,35 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("🚀 Server corriendo en puerto", PORT);
+});
+
+/* =========================
+   💬 CHATROOM
+========================= */
+
+let messages = [];
+
+io.on("connection", (socket) => {
+  console.log("🟢 user conectado");
+
+  // enviar historial
+  socket.emit("history", messages);
+
+  socket.on("message", (msg) => {
+    const data = {
+      text: msg,
+      time: new Date().toLocaleTimeString()
+    };
+
+    messages.push(data);
+
+    // limitar historial (opcional)
+    if (messages.length > 50) messages.shift();
+
+    io.emit("message", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("🔴 user salió");
+  });
 });
