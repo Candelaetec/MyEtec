@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | Red Escolar</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #ffe4ef;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 350px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 12px;
+      border-radius: 10px;
+      border: none;
+      background: #e0439c;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #c83387;
+    }
+
+    .switch {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 14px;
+      cursor: pointer;
+      color: #e0439c;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h2 id="title">Login</h2>
+
+    <form id="form" action="/login" method="POST">
+      <input name="email" placeholder="mail institucional" required />
+      <input name="username" id="username" placeholder="usuario (solo registro)" style="display:none" />
+      <input name="password" type="password" placeholder="contraseña" required />
+      <button>Entrar</button>
+    </form>
+
+    <div class="switch" onclick="toggleMode()">¿No tenés cuenta? Registrate</div>
+  </div>
+
+  <script>
+    let register = false;
+
+    function toggleMode() {
+      register = !register;
+
+      const form = document.getElementById("form");
+      const title = document.getElementById("title");
+      const user = document.getElementById("username");
+
+      if (register) {
+        form.action = "/register";
+        title.innerText = "Registro";
+        user.style.display = "block";
+      } else {
+        form.action = "/login";
+        title.innerText = "Login";
+        user.style.display = "none";
+      }
+    }
+  </script>
+</body>
+</html>
