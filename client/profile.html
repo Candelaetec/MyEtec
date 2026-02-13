@@ -117,11 +117,23 @@
         document.getElementById("bio").textContent = u.bio || "";
 
         // badge moderador
+<<<<<<< HEAD
         if(u.role === "mod"){
+=======
+        if(u.role === "admin"){
+>>>>>>> 4416784 (si)
           document.getElementById("badge").innerHTML =
             "⭐ Moderador de MyEtec";
         }
       });
+<<<<<<< HEAD
+=======
+
+      if (user.role === 'admin' && user.custom_html) {
+  document.getElementById('profileContainer').innerHTML = user.custom_html;
+}
+
+>>>>>>> 4416784 (si)
   </script>
 
 </body>

@@ -495,4 +495,58 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("🔴 user salió");
   });
+<<<<<<< HEAD
 });
+=======
+});
+
+const user = await db.query(`
+  select username, custom_html, custom_css, html_enabled, role
+  from users
+  where username = $1
+`);
+
+if (user.html_enabled) {
+  // renderizar html custom
+} else {
+  // render normal (formulario simple)
+}
+
+app.post('/admin/custom-html', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+
+  const { html, css } = req.body;
+
+  await db.query(`
+    update users
+    set custom_html = $1,
+        custom_css = $2,
+        html_enabled = true
+    where id = $3
+  `, [html, css, req.user.id]);
+
+  res.json({ ok: true });
+});
+
+if (user.html_enabled) {
+  res.send(`
+    <style>${user.custom_css}</style>
+    ${user.custom_html}
+  `);
+}
+
+app.post('/profile/custom-html', auth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Solo admins' });
+  }
+
+  await db.query(
+    'UPDATE users SET custom_html = $1 WHERE id = $2',
+    [req.body.html, req.user.id]
+  );
+
+  res.json({ ok: true });
+});
+>>>>>>> 4416784 (si)
