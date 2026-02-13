@@ -15,12 +15,12 @@ const app = express();
 /* PATHS SEGUROS */
 
 const DB_PATH = path.join(process.cwd(), "server", "database.db");
+const CLIENT_PATH = path.join(__dirname, "client");
+const DB_PATH = path.join(__dirname, "database.db");
 
 
 // backup json (por si se reinicia)
 const BACKUP_PATH = path.join(__dirname, "backup-users.json");
-
-const CLIENT_PATH = path.join(process.cwd(), "client");
 
 /* =========================
    🗄️ DB
