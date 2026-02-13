@@ -131,3 +131,13 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server corriendo"));
 
 ;
+
+/* =========================
+   LISTAR USUARIOS (solo emails)
+========================= */
+app.get("/users", (req, res) => {
+  db.all("SELECT email FROM users", [], (err, rows) => {
+    if (err) return res.status(500).send("Error DB");
+    res.json(rows);
+  });
+});
