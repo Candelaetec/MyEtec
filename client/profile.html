@@ -1,30 +1,20 @@
-<h1>Mi Perfil</h1>
-
 <form action="/update-profile" method="POST" enctype="multipart/form-data">
-  <label>Banner</label>
   <input type="file" name="banner">
-
-  <label>Foto perfil</label>
   <input type="file" name="avatar">
-
-  <label>Bio</label>
   <textarea name="bio"></textarea>
-
   <button>Guardar</button>
 </form>
 
-<hr>
-
-<img id="banner" style="width:100%;max-height:200px;object-fit:cover">
-<img id="avatar" style="width:120px;border-radius:50%">
+<img id="banner">
+<img id="avatar">
 <p id="bio"></p>
 
 <script>
 fetch("/me")
   .then(r => r.json())
   .then(u => {
-    if (u.banner) document.getElementById("banner").src = u.banner;
-    if (u.avatar) document.getElementById("avatar").src = u.avatar;
-    document.getElementById("bio").textContent = u.bio || "";
+    if (u.banner) banner.src = u.banner;
+    if (u.avatar) avatar.src = u.avatar;
+    bio.textContent = u.bio || "";
   });
 </script>

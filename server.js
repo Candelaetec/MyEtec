@@ -2,21 +2,26 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const session = require("express-session");
 const path = require("path");
-const { Pool } = require("pg");
-const multer = require("multer");
-const app = express();
 const fs = require("fs");
-const path = require("path");
+const multer = require("multer");
+const { Pool } = require("pg");
+
+const app = express();
 
 /* =========================
-   📸 UPLOADS CONFIG
+   📁 PATHS
 ========================= */
 
+const CLIENT_PATH = path.join(__dirname, "client");
 const UPLOAD_PATH = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(UPLOAD_PATH)) {
   fs.mkdirSync(UPLOAD_PATH);
 }
+
+/* =========================
+   📸 MULTER (subida imágenes)
+========================= */
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, UPLOAD_PATH),
@@ -31,7 +36,7 @@ const upload = multer({ storage });
 app.use("/uploads", express.static(UPLOAD_PATH));
 
 /* =========================
-   DB (SUPABASE POSTGRES)
+   🗄️ DB (Supabase Postgres)
 ========================= */
 
 const pool = new Pool({
@@ -40,7 +45,7 @@ const pool = new Pool({
 });
 
 /* =========================
-   INIT DB (SIN TOP LEVEL AWAIT)
+   INIT TABLA
 ========================= */
 
 async function initDB() {
@@ -52,7 +57,8 @@ async function initDB() {
       password TEXT,
       role TEXT DEFAULT 'user',
       avatar TEXT,
-      banner TEXT
+      banner TEXT,
+      bio TEXT
     )
   `);
 
@@ -74,14 +80,14 @@ app.use(session({
   saveUninitialized: false
 }));
 
-app.use(express.static(path.join(__dirname, "client")));
+app.use(express.static(CLIENT_PATH));
 
 /* =========================
    HOME
 ========================= */
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "client/login.html"));
+  res.sendFile(path.join(CLIENT_PATH, "login.html"));
 });
 
 /* =========================
@@ -103,7 +109,8 @@ app.post("/register", async (req, res) => {
     );
 
     res.redirect("/login.html");
-  } catch (e) {
+
+  } catch {
     res.status(400).send("Usuario ya existe");
   }
 });
@@ -133,44 +140,67 @@ app.post("/login", async (req, res) => {
 });
 
 /* =========================
-   PERFIL ACTUAL
+   PERFIL ACTUAL (/me)
 ========================= */
 
-app.get("/me", (req, res) => {
-  if (!req.session.userId) return res.status(401).send("No autorizado");
+app.get("/me", async (req, res) => {
+  if (!req.session.userId) return res.sendStatus(401);
 
-  pool.query(
-    "SELECT id, username, email, role, banner, avatar, bio FROM users WHERE id=$1",
+  const { rows } = await pool.query(
+    "SELECT id, username, email, role, avatar, banner, bio FROM users WHERE id=$1",
     [req.session.userId]
-  )
-  .then(r => res.json(r.rows[0]));
-});
-
-
-/* =========================
-   EDITAR PERFIL (foto/banner)
-========================= */
-
-app.post("/profile", async (req, res) => {
-  const { avatar, banner, username } = req.body;
-
-  await pool.query(
-    "UPDATE users SET avatar=$1, banner=$2, username=$3 WHERE id=$4",
-    [avatar, banner, username, req.session.userId]
   );
 
-  res.send("Perfil actualizado ✅");
+  res.json(rows[0]);
 });
 
 /* =========================
-   USERS ADMIN
+   UPDATE PROFILE (foto/banner/bio)
+========================= */
+
+app.post(
+  "/update-profile",
+  upload.fields([
+    { name: "avatar", maxCount: 1 },
+    { name: "banner", maxCount: 1 }
+  ]),
+  async (req, res) => {
+
+    if (!req.session.userId) return res.sendStatus(401);
+
+    const { bio, username } = req.body;
+
+    const avatar = req.files.avatar
+      ? "/uploads/" + req.files.avatar[0].filename
+      : null;
+
+    const banner = req.files.banner
+      ? "/uploads/" + req.files.banner[0].filename
+      : null;
+
+    await pool.query(
+      `
+      UPDATE users
+      SET
+        username = COALESCE($1, username),
+        bio = COALESCE($2, bio),
+        avatar = COALESCE($3, avatar),
+        banner = COALESCE($4, banner)
+      WHERE id=$5
+      `,
+      [username, bio, avatar, banner, req.session.userId]
+    );
+
+    res.redirect("/perfil.html");
+  }
+);
+
+/* =========================
+   USERS (admin debug)
 ========================= */
 
 app.get("/users", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT id,email FROM users"
-  );
-
+  const { rows } = await pool.query("SELECT id,email FROM users");
   res.json(rows);
 });
 
@@ -191,41 +221,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server corriendo");
 });
-
-/* =========================
-   ✏️ UPDATE PROFILE
-========================= */
-
-app.post(
-  "/update-profile",
-  upload.fields([
-    { name: "avatar", maxCount: 1 },
-    { name: "banner", maxCount: 1 }
-  ]),
-  async (req, res) => {
-    if (!req.session.userId) return res.sendStatus(401);
-
-    const { bio } = req.body;
-
-    const avatar = req.files.avatar
-      ? "/uploads/" + req.files.avatar[0].filename
-      : null;
-
-    const banner = req.files.banner
-      ? "/uploads/" + req.files.banner[0].filename
-      : null;
-
-    await pool.query(
-      `
-      UPDATE users
-      SET bio = COALESCE($1,bio),
-          avatar = COALESCE($2,avatar),
-          banner = COALESCE($3,banner)
-      WHERE id=$4
-      `,
-      [bio, avatar, banner, req.session.userId]
-    );
-
-    res.redirect("/perfil.html");
-  }
-);
