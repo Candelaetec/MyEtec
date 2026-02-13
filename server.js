@@ -3,17 +3,33 @@ const bcrypt = require("bcrypt");
 const session = require("express-session");
 const path = require("path");
 const { Pool } = require("pg");
-
+const multer = require("multer");
 const app = express();
 
 /* =========================
-   📁 PATHS
+   📸 UPLOADS CONFIG
 ========================= */
 
-const CLIENT_PATH = path.join(__dirname, "client");
+const UPLOAD_PATH = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(UPLOAD_PATH)) {
+  fs.mkdirSync(UPLOAD_PATH);
+}
+
+const storage = multer.diskStorage({
+  destination: (_, __, cb) => cb(null, UPLOAD_PATH),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, req.session.userId + "-" + file.fieldname + ext);
+  }
+});
+
+const upload = multer({ storage });
+
+app.use("/uploads", express.static(UPLOAD_PATH));
 
 /* =========================
-   🗄️ SUPABASE (Postgres)
+   DB (SUPABASE POSTGRES)
 ========================= */
 
 const pool = new Pool({
@@ -22,24 +38,26 @@ const pool = new Pool({
 });
 
 /* =========================
-   🔥 CREAR TABLA AUTOMÁTICA
+   INIT DB (SIN TOP LEVEL AWAIT)
 ========================= */
 
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      username TEXT NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'user'
-    );
+      email TEXT UNIQUE,
+      username TEXT,
+      password TEXT,
+      role TEXT DEFAULT 'user',
+      avatar TEXT,
+      banner TEXT
+    )
   `);
 
-  console.log("✅ DB lista");
+  console.log("✅ Tabla lista");
 }
 
-initDB();
+initDB().catch(console.error);
 
 /* =========================
    MIDDLEWARES
@@ -54,14 +72,14 @@ app.use(session({
   saveUninitialized: false
 }));
 
-app.use(express.static(CLIENT_PATH));
+app.use(express.static(path.join(__dirname, "client")));
 
 /* =========================
    HOME
 ========================= */
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(CLIENT_PATH, "login.html"));
+  res.sendFile(path.join(__dirname, "client/login.html"));
 });
 
 /* =========================
@@ -72,23 +90,18 @@ app.post("/register", async (req, res) => {
   try {
     const { email, username, password } = req.body;
 
-    if (!email.endsWith("@alumno.etec.um.edu.ar")) {
+    if (!email.endsWith("@alumno.etec.um.edu.ar"))
       return res.status(400).send("Usá el mail institucional");
-    }
 
     const hash = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      "INSERT INTO users (email, username, password) VALUES ($1,$2,$3) RETURNING id",
+    await pool.query(
+      "INSERT INTO users (email, username, password) VALUES ($1,$2,$3)",
       [email, username, hash]
     );
 
-    req.session.userId = result.rows[0].id;
-
-    res.redirect("/feed.html");
-
-  } catch (err) {
-    console.log(err);
+    res.redirect("/login.html");
+  } catch (e) {
     res.status(400).send("Usuario ya existe");
   }
 });
@@ -100,12 +113,12 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const result = await pool.query(
+  const { rows } = await pool.query(
     "SELECT * FROM users WHERE email=$1",
     [email]
   );
 
-  const user = result.rows[0];
+  const user = rows[0];
 
   if (!user) return res.status(400).send("No existe");
 
@@ -118,43 +131,45 @@ app.post("/login", async (req, res) => {
 });
 
 /* =========================
-   USERS (admin view)
+   PERFIL ACTUAL
+========================= */
+
+app.get("/me", (req, res) => {
+  if (!req.session.userId) return res.status(401).send("No autorizado");
+
+  pool.query(
+    "SELECT id, username, email, role, banner, avatar, bio FROM users WHERE id=$1",
+    [req.session.userId]
+  )
+  .then(r => res.json(r.rows[0]));
+});
+
+
+/* =========================
+   EDITAR PERFIL (foto/banner)
+========================= */
+
+app.post("/profile", async (req, res) => {
+  const { avatar, banner, username } = req.body;
+
+  await pool.query(
+    "UPDATE users SET avatar=$1, banner=$2, username=$3 WHERE id=$4",
+    [avatar, banner, username, req.session.userId]
+  );
+
+  res.send("Perfil actualizado ✅");
+});
+
+/* =========================
+   USERS ADMIN
 ========================= */
 
 app.get("/users", async (req, res) => {
-  const result = await pool.query(
-    "SELECT id, email, username, role FROM users"
+  const { rows } = await pool.query(
+    "SELECT id,email FROM users"
   );
 
-  res.json(result.rows);
-});
-
-/* =========================
-   HACER MOD
-========================= */
-
-app.post("/make-mod/:id", async (req, res) => {
-  await pool.query(
-    "UPDATE users SET role='mod' WHERE id=$1",
-    [req.params.id]
-  );
-
-  res.send("Ahora es moderador ✅");
-});
-
-/* =========================
-   PERFIL
-========================= */
-
-app.get("/me", async (req, res) => {
-  if (!req.session.userId) return res.status(401).send("No autorizado");
-
-  const result = await pool.query(
-    "SELECT id, username, email, role FROM users WHERE id=$1",
-    [req.session.userId]
-  );
-
-  res.json(result.rows[0]);
+  res.json(rows);
 });
 
 /* =========================
@@ -175,25 +190,40 @@ app.listen(PORT, () => {
   console.log("🚀 Server corriendo");
 });
 
-// agregar campo bio si no existe
-await pool.query(`
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''
-`);
-
 /* =========================
-   UPDATE PROFILE
+   ✏️ UPDATE PROFILE
 ========================= */
 
-app.post("/update-profile", async (req, res) => {
-  if (!req.session.userId) return res.sendStatus(401);
+app.post(
+  "/update-profile",
+  upload.fields([
+    { name: "avatar", maxCount: 1 },
+    { name: "banner", maxCount: 1 }
+  ]),
+  async (req, res) => {
+    if (!req.session.userId) return res.sendStatus(401);
 
-  const { username, bio } = req.body;
+    const { bio } = req.body;
 
-  await pool.query(
-    "UPDATE users SET username=$1, bio=$2 WHERE id=$3",
-    [username, bio, req.session.userId]
-  );
+    const avatar = req.files.avatar
+      ? "/uploads/" + req.files.avatar[0].filename
+      : null;
 
-  res.sendStatus(200);
-});
+    const banner = req.files.banner
+      ? "/uploads/" + req.files.banner[0].filename
+      : null;
+
+    await pool.query(
+      `
+      UPDATE users
+      SET bio = COALESCE($1,bio),
+          avatar = COALESCE($2,avatar),
+          banner = COALESCE($3,banner)
+      WHERE id=$4
+      `,
+      [bio, avatar, banner, req.session.userId]
+    );
+
+    res.redirect("/perfil.html");
+  }
+);

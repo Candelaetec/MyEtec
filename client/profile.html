@@ -1,28 +1,30 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <title>Perfil</title>
-  <link rel="stylesheet" href="profile.css" />
-</head>
-<body>
+<h1>Mi Perfil</h1>
 
-  <div class="banner"></div>
+<form action="/update-profile" method="POST" enctype="multipart/form-data">
+  <label>Banner</label>
+  <input type="file" name="banner">
 
-  <div class="card">
-    <img id="avatar" src="https://i.imgur.com/2DhmtJ4.png" class="avatar">
+  <label>Foto perfil</label>
+  <input type="file" name="avatar">
 
-    <input id="username" placeholder="Nombre">
+  <label>Bio</label>
+  <textarea name="bio"></textarea>
 
-    <span id="modBadge" class="mod hidden">
-      Moderador de MyEtec
-    </span>
+  <button>Guardar</button>
+</form>
 
-    <textarea id="bio" placeholder="Descripción"></textarea>
+<hr>
 
-    <button onclick="save()">Guardar</button>
-  </div>
+<img id="banner" style="width:100%;max-height:200px;object-fit:cover">
+<img id="avatar" style="width:120px;border-radius:50%">
+<p id="bio"></p>
 
-  <script src="profile.js"></script>
-</body>
-</html>
+<script>
+fetch("/me")
+  .then(r => r.json())
+  .then(u => {
+    if (u.banner) document.getElementById("banner").src = u.banner;
+    if (u.avatar) document.getElementById("avatar").src = u.avatar;
+    document.getElementById("bio").textContent = u.bio || "";
+  });
+</script>
